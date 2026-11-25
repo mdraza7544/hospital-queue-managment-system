@@ -1,10 +1,17 @@
-// Monitor JavaScript - Queue Display System
+// Hospital Queue Monitor Display System
 
-// Update time and date
+const previousServingMap = {};
+let audioInitialized = false;
+
+// Initialize user interaction to permit audio play
+document.addEventListener('click', () => {
+    audioInitialized = true;
+}, { once: true });
+
+// Update live time and date
 function updateDateTime() {
     const now = new Date();
     
-    // Format time
     const timeStr = now.toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
@@ -12,7 +19,6 @@ function updateDateTime() {
         hour12: true
     });
     
-    // Format date
     const dateStr = now.toLocaleDateString('en-US', {
         weekday: 'long',
         year: 'numeric',
@@ -20,109 +26,114 @@ function updateDateTime() {
         day: 'numeric'
     });
     
-    document.getElementById('time-display').textContent = timeStr;
-    document.getElementById('date-display').textContent = dateStr;
+    const timeEl = document.getElementById('time-display');
+    const dateEl = document.getElementById('date-display');
+    if (timeEl) timeEl.textContent = timeStr;
+    if (dateEl) dateEl.textContent = dateStr;
 }
 
-// Fetch and update queue data
-// Fetch and update queue data
+// Play notification sound chime when a ticket is called
+function playChime() {
+    try {
+        const audio = new Audio('/STI_Queueing-System/sounds/notification.wav');
+        audio.play().catch(() => {
+            // Autoplay might be blocked until user interacts with document
+        });
+    } catch (e) {
+        // Silently catch audio errors
+    }
+}
+
+// Fetch and update queue data for all department columns
 async function updateQueue() {
     try {
-        const response = await fetch('/STI_Queuing_System/api/get-queue.php');
+        const response = await fetch('/STI_Queueing-System/api/get-queue.php');
         const result = await response.json();
-        
-        // DEBUG: Print exactly what the database sent
-        console.log("API Result:", result);
 
         if (result.success) {
             const tickets = result.tickets || [];
-            
-            // DEBUG: Check the spelling of department names
-            if (tickets.length > 0) {
-                console.log("First Ticket Dept Name:", tickets[0].department_name);
+            const columns = document.querySelectorAll('.monitor-column');
+            let shouldPlayChime = false;
+
+            columns.forEach(col => {
+                const deptId = parseInt(col.dataset.deptId);
+                const deptKey = `dept-${deptId}`;
+
+                // Filter tickets strictly for this department
+                const deptTickets = tickets.filter(t => parseInt(t.department_id) === deptId);
+
+                const servingTicket = deptTickets.find(t => t.status === 'serving');
+                const waitingTickets = deptTickets.filter(t => t.status === 'waiting');
+
+                const servingElement = document.getElementById(`${deptKey}-serving`);
+                const nextListElement = document.getElementById(`${deptKey}-next`);
+
+                const newServingNumber = servingTicket ? servingTicket.ticket_number : '---';
+
+                // Check if serving number has newly changed
+                if (servingTicket && previousServingMap[deptId] !== newServingNumber) {
+                    if (previousServingMap[deptId] !== undefined) {
+                        shouldPlayChime = true;
+                    }
+                }
+                previousServingMap[deptId] = newServingNumber;
+
+                // Update "NOW SERVING"
+                if (servingElement) {
+                    servingElement.textContent = newServingNumber;
+                }
+
+                // Update "Proceed to" Window / Room Label
+                const windowElement = document.getElementById(`${deptKey}-window`);
+                if (windowElement) {
+                    if (servingTicket) {
+                        const destination = servingTicket.room_label ? servingTicket.room_label : `Window ${servingTicket.window_number || ''}`;
+                        windowElement.textContent = `Proceed to ${destination}`;
+                    } else {
+                        windowElement.textContent = windowElement.dataset.defaultWindow || '---';
+                    }
+                }
+
+                // Update "NEXT IN LINE" (top 3)
+                if (nextListElement) {
+                    nextListElement.innerHTML = '';
+                    const topWaiting = waitingTickets.slice(0, 3);
+
+                    if (topWaiting.length > 0) {
+                        topWaiting.forEach(ticket => {
+                            const item = document.createElement('div');
+                            item.className = 'next-item';
+                            if (ticket.is_priority) {
+                                item.classList.add('priority');
+                            }
+                            item.textContent = ticket.ticket_number;
+                            nextListElement.appendChild(item);
+                        });
+                    } else {
+                        const emptyItem = document.createElement('div');
+                        emptyItem.className = 'next-item';
+                        emptyItem.textContent = '---';
+                        nextListElement.appendChild(emptyItem);
+                    }
+                }
+            });
+
+            if (shouldPlayChime) {
+                playChime();
             }
 
-            // FILTERING (This is likely where it breaks)
-            // We use .toLowerCase() and .trim() to fix spelling/casing issues automatically
-            
-            const cashierTickets = tickets.filter(t => 
-                t.department_name.trim().toLowerCase() === 'cashier'
-            );
-
-            // NOTE: Check if your DB says "Admission" or "Admissions" (Plural)
-            const admissionTickets = tickets.filter(t => 
-                t.department_name.trim().toLowerCase().includes('admission')
-            );
-            
-            const registrarTickets = tickets.filter(t => 
-                t.department_name.trim().toLowerCase() === 'registrar'
-            );
-            
-            // Update the display
-            updateDepartment('cashier', cashierTickets);
-            updateDepartment('admission', admissionTickets);
-            updateDepartment('registrar', registrarTickets);
-            
         } else {
-            console.error('API error:', result.message || 'Unknown error');
+            console.error('Queue API error:', result.message || 'Unknown error');
         }
     } catch (error) {
-        console.error('Error fetching queue:', error);
+        console.error('Error fetching queue status:', error);
     }
 }
 
-function updateDepartment(deptName, tickets) {
-    if (!tickets || tickets.length === 0) {
-        // No tickets, show all as empty
-        const servingElement = document.getElementById(`${deptName}-serving`);
-        if (servingElement) servingElement.textContent = '---';
-        
-        const nextList = document.getElementById(`${deptName}-next`);
-        if (nextList) {
-            nextList.innerHTML = '<div class="next-item">---</div>';
-        }
-        return;
-    }
-    
-    // Find currently serving ticket
-    const serving = tickets.find(t => t.status === 'serving');
-    const waiting = tickets.filter(t => t.status === 'waiting');
-    
-    // Update "Now Serving" section
-    const servingElement = document.getElementById(`${deptName}-serving`);
-    if (servingElement) {
-        servingElement.textContent = serving ? serving.ticket_number : '---';
-    }
-    
-    // Update "Next in Line" section
-    const nextList = document.getElementById(`${deptName}-next`);
-    if (nextList) {
-        nextList.innerHTML = '';
-        
-        const nextThree = waiting.slice(0, 3);
-        if (nextThree.length > 0) {
-            nextThree.forEach(ticket => {
-                const item = document.createElement('div');
-                item.className = 'next-item';
-                if (ticket.is_priority) {
-                    item.classList.add('priority');
-                }
-                item.textContent = ticket.ticket_number;
-                nextList.appendChild(item);
-            });
-        } else {
-            const item = document.createElement('div');
-            item.className = 'next-item';
-            item.textContent = '---';
-            nextList.appendChild(item);
-        }
-    }
-}
-
-// Initialize
+// Initial calls
 updateDateTime();
 updateQueue();
 
-// Update every second for time, every 3 seconds for queue
+// Interval timers
 setInterval(updateDateTime, 1000);
 setInterval(updateQueue, 3000);

@@ -1,4 +1,4 @@
-// Staff Login JavaScript
+// Universal Portal Login JavaScript (Admin / Staff / Doctor)
 
 document.addEventListener('DOMContentLoaded', function() {
     const loginForm = document.querySelector('.login-form');
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', function() {
             };
             
             try {
-                const response = await fetch('/STI_Queuing_System/api/login.php', {
+                const response = await fetch('/STI_Queueing-System/api/login.php', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -33,14 +33,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Redirect to dashboard (department is automatically identified)
-                    window.location.href = '/STI_Queuing_System/staff-dashboard';
+                    // Redirect to role-specific dashboard
+                    window.location.href = result.redirect || '/STI_Queueing-System/staff-dashboard';
                 } else {
-                    alert('Login failed: ' + result.message);
+                    alert('Login failed: ' + (result.message || 'Invalid credentials'));
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('Login failed. Please try again.');
+                console.error('Login error:', error);
+                alert('Login failed. Please check network connection and try again.');
             }
         });
     }

@@ -408,9 +408,9 @@
 .monitor-grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 32px;
-  padding: 32px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 24px;
   max-width: 1920px;
   margin: 0 auto;
   width: 100%;
@@ -1209,6 +1209,11 @@
   color: #383d41;
 }
 
+.status-badge.status-referred {
+  background: #e2d9f3;
+  color: #59359a;
+}
+
 .status-badge.status-serving {
   background: #cfe2ff;
   color: #084298;
@@ -1646,3 +1651,420 @@
     padding: 18px 32px;
   }
 }
+
+/* ===================================
+   ROLE-BASED DASHBOARD EXTENSIONS
+   =================================== */
+
+.metric-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: #ffffff;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 1px solid #e1e8ed;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-card.primary { border-left: 4px solid #0054A6; }
+.stat-card.success { border-left: 4px solid #27ae60; }
+.stat-card.warning { border-left: 4px solid #f39c12; }
+.stat-card.info    { border-left: 4px solid #2980b9; }
+.stat-card.purple  { border-left: 4px solid #8e44ad; }
+.stat-card.danger  { border-left: 4px solid #e74c3c; }
+
+.stat-label {
+  font-size: 13px;
+  color: #666;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #2c3e50;
+  line-height: 1.1;
+}
+
+.stat-subtext {
+  font-size: 12px;
+  color: #888;
+  margin-top: 6px;
+}
+
+/* Status Badges */
+.badge-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background-color: #e8f8f5;
+  color: #27ae60;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-online::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #27ae60;
+  box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.2);
+}
+
+.badge-offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background-color: #f2f3f4;
+  color: #7f8c8d;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-offline::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #bdc3c7;
+}
+
+.badge-active {
+  background-color: #e8f8f5;
+  color: #27ae60;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-inactive {
+  background-color: #fdedec;
+  color: #e74c3c;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge-role {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.badge-role.role-admin { background: #e8eaf6; color: #3f51b5; }
+.badge-role.role-doctor { background: #e0f2f1; color: #00796b; }
+.badge-role.role-staff { background: #fff3e0; color: #e65100; }
+
+/* Modals */
+.custom-modal {
+  display: none;
+  position: fixed;
+  z-index: 10000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.custom-modal.active {
+  display: flex;
+}
+.custom-modal-content {
+  background: #ffffff;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  animation: modalFadeIn 0.25s ease-out;
+}
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.custom-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #e1e8ed;
+}
+.custom-modal-header h3 {
+  margin: 0;
+  color: #1a5276;
+  font-size: 18px;
+}
+.custom-modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #888;
+  cursor: pointer;
+  line-height: 1;
+}
+.custom-modal-close:hover {
+  color: #333;
+}
+.custom-modal-body {
+  padding: 24px;
+}
+.custom-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e1e8ed;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f8f9fa;
+  border-radius: 0 0 10px 10px;
+}
+
+/* Profile View Card */
+.profile-card {
+  background: #ffffff;
+  border-radius: 10px;
+  border: 1px solid #e1e8ed;
+  padding: 30px;
+  max-width: 650px;
+  margin: 0 auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #0054A6;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 20px;
+}
+.profile-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 20px;
+}
+.profile-info-item {
+  background: #f8f9fa;
+  padding: 12px 16px;
+  border-radius: 6px;
+  border-left: 3px solid #0054A6;
+}
+.profile-info-item label {
+  font-size: 11px;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+.profile-info-item span {
+  font-size: 15px;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+/* Duty Attendance Badges & Widgets */
+.badge-onduty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background-color: #e8f8f5;
+  color: #16a085;
+  font-size: 12px;
+  font-weight: 700;
+}
+.badge-onduty::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #1abc9c;
+  box-shadow: 0 0 0 2px rgba(26, 188, 156, 0.3);
+}
+
+.badge-offduty {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background-color: #f2f3f4;
+  color: #7f8c8d;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-offduty::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #bdc3c7;
+}
+
+.badge-autoclosed {
+  background-color: #fef9e7;
+  color: #b7950b;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #f9e79f;
+}
+
+.badge-completed {
+  background-color: #eafaf1;
+  color: #27ae60;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Header Duty Widget */
+.duty-nav-widget {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  margin-right: 8px;
+}
+.duty-nav-widget:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Sub-Tabs for Admin Attendance */
+.subtabs-nav {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e1e8ed;
+  padding-bottom: 8px;
+}
+.btn-subtab {
+  background: #f4f6f9;
+  border: 1px solid #dcdfe4;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-subtab.active {
+  background: #0054A6;
+  color: #ffffff;
+  border-color: #0054A6;
+}
+.btn-subtab:hover:not(.active) {
+  background: #e9ecef;
+}
+
+/* Attendance Page Hero Card */
+.duty-hero-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  border: 1px solid #e1e8ed;
+  max-width: 680px;
+  margin: 0 auto 32px auto;
+}
+.duty-timer-display {
+  font-size: 52px;
+  font-weight: 800;
+  color: #1a5276;
+  letter-spacing: 2px;
+  font-family: monospace;
+  margin: 16px 0;
+}
+.duty-actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 24px;
+}
+.btn-duty-checkin {
+  background: #27ae60;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-duty-checkin:hover:not(:disabled) {
+  background: #219653;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(39, 174, 96, 0.3);
+}
+.btn-duty-checkin:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.btn-duty-checkout {
+  background: #e74c3c;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-duty-checkout:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
+}
+.btn-duty-checkout:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+}
+

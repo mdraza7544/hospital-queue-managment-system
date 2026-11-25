@@ -1,5 +1,5 @@
 <?php
-// Redirect to kiosk page by default
-header('Location: /STI_Queuing_System/kiosk');
+// Redirect to monitor page by default
+header('Location: /STI_Queueing-System/monitor');
 exit;
 ?>

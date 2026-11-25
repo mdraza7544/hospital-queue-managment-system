@@ -1,558 +1,336 @@
-// Staff Dashboard JavaScript
+﻿// Hospital Staff Dashboard JavaScript
 
-let currentTicket = null;
 let departmentId = null;
-let currentPage = 1;
-let historyLimit = 50;
-let historyTotal = 0;
-let currentFilters = {};
-let allStaffList = [];
-let allDepartments = [];
+let departmentName = '';
+let currentTab = 'checkin';
+let deptDoctors = [];
+let isOnDuty = false;
 
-// Initialize on page load
 document.addEventListener('DOMContentLoaded', async function() {
-    // Get department from session (passed via PHP)
     departmentId = parseInt(document.body.dataset.departmentId);
-    
-    if (!departmentId) {
-        alert('Session expired. Please login again.');
-        window.location.href = '/STI_Queuing_System/staff-login';
-        return;
-    }
-    
-    // Load initial data
-    await updateQueueCount();
-    
-    // Refresh queue count every 5 seconds
-    setInterval(updateQueueCount, 5000);
-    
-    // Show queue tab by default
-    showTab('queue');
-    
-    // Load departments for staff management
-    await loadDepartments();
+    departmentName = document.body.dataset.departmentName || 'Department';
+
+    // Start heartbeat immediately and every 30s
+    await runHeartbeat();
+    setInterval(runHeartbeat, 30000);
+
+    // Check attendance duty status
+    await checkDutyStatus();
+    setInterval(checkDutyStatus, 15000);
+
+    // Load doctors for this department
+    await loadDoctorsForCheckIn();
+
+    // Default tab
+    showTab('checkin');
 });
 
-// Update queue count
-async function updateQueueCount() {
+async function runHeartbeat() {
     try {
-        const response = await fetch('/STI_Queuing_System/api/get-queue.php');
-        const result = await response.json();
-        
-        if (result.success) {
-            const tickets = result.tickets;
-            
-            // Count waiting tickets for current department
-            const waitingCount = tickets.filter(t => 
-                t.status === 'waiting' && 
-                parseInt(t.department_id) === departmentId
-            ).length;
-            
-            document.getElementById('queueCount').textContent = waitingCount;
+        const res = await fetch('/STI_Queueing-System/api/heartbeat.php');
+        if (res.status === 401) {
+            window.location.href = '/STI_Queueing-System/staff-login';
+            return;
         }
-    } catch (error) {
-        console.error('Error fetching queue:', error);
+        const data = await res.json();
+        if (!data.success) {
+            window.location.href = '/STI_Queueing-System/staff-login';
+            return;
+        }
+        if (data.role !== 'staff') {
+            if (data.role === 'admin') {
+                window.location.href = '/STI_Queueing-System/admin-dashboard';
+            } else if (data.role === 'doctor') {
+                window.location.href = '/STI_Queueing-System/doctor-dashboard';
+            } else {
+                window.location.href = '/STI_Queueing-System/staff-login';
+            }
+        }
+    } catch (e) {
+        // network glitch
     }
 }
 
-// Call next student
-async function callNext() {
+async function checkDutyStatus() {
     try {
-        const response = await fetch('/STI_Queuing_System/api/call-next.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                department_id: departmentId
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            currentTicket = result.ticket;
-            
-            // Update UI
-            document.getElementById('ticketNumber').textContent = currentTicket.ticket_number;
-            document.getElementById('studentName').textContent = currentTicket.student_name;
-            
-            // Update queue count
-            await updateQueueCount();
-            
-            // Optional: Play notification sound
-            playNotificationSound();
-        } else {
-            alert(result.message || 'No tickets in queue');
+        const res = await fetch('/STI_Queueing-System/api/get-my-attendance.php');
+        if (res.status === 401) {
+            window.location.href = '/STI_Queueing-System/staff-login';
+            return;
         }
-    } catch (error) {
-        console.error('Error calling next:', error);
-        alert('Failed to call next student');
-    }
-}
-
-// Mark transaction as done
-async function markDone() {
-    if (!currentTicket) {
-        alert('No student currently being served');
-        return;
-    }
-    
-    if (!confirm('Mark this transaction as complete?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/STI_Queuing_System/api/complete-ticket.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ticket_id: currentTicket.id,
-                status: 'completed'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            // Clear current ticket
-            currentTicket = null;
-            document.getElementById('ticketNumber').textContent = '---';
-            document.getElementById('studentName').textContent = '---';
-            
-            // Update queue count
-            await updateQueueCount();
-            
-            alert('Transaction completed successfully!');
-        } else {
-            alert('Failed to complete transaction');
+        const data = await res.json();
+        if (data.success) {
+            isOnDuty = !!data.is_on_duty;
+            const badge = document.getElementById('headerDutyBadge');
+            if (badge) {
+                if (isOnDuty) {
+                    badge.className = 'badge-onduty';
+                    badge.innerHTML = '🟢 On Duty';
+                } else {
+                    badge.className = 'badge-offduty';
+                    badge.innerHTML = '⚪ Off Duty';
+                }
+            }
         }
-    } catch (error) {
-        console.error('Error completing ticket:', error);
-        alert('Failed to complete transaction');
+    } catch (e) {
+        // network glitch
     }
-}
-
-// Recall current student
-function recallStudent() {
-    if (!currentTicket) {
-        alert('No student currently being served');
-        return;
-    }
-    
-    alert(`Recalling ${currentTicket.ticket_number}...`);
-    playNotificationSound();
-}
-
-// Mark student as no show
-async function markNoShow() {
-    if (!currentTicket) {
-        alert('No student currently being served');
-        return;
-    }
-    
-    if (!confirm('Mark this student as No Show?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/STI_Queuing_System/api/complete-ticket.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                ticket_id: currentTicket.id,
-                status: 'cancelled'
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('Student marked as No Show');
-            
-            // Automatically call next
-            await callNext();
-        } else {
-            alert('Failed to mark as no show');
-        }
-    } catch (error) {
-        console.error('Error marking no show:', error);
-        alert('Failed to mark as no show');
-    }
-}
-
-// Play notification sound (optional)
-function playNotificationSound() {
-    // You can add an audio element and play it here
-    // const audio = new Audio('/sounds/notification.mp3');
-    // audio.play();
 }
 
 // ========================================
-// HISTORY TAB FUNCTIONS
+// TAB SWITCHING
 // ========================================
-
-// Show/Hide tabs
 function showTab(tabName) {
-    // Hide all tabs
-    document.getElementById('queueTab').classList.remove('active');
-    document.getElementById('historyTab').classList.remove('active');
-    document.getElementById('staffTab').classList.remove('active');
-    
-    // Remove active class from buttons
-    document.getElementById('btnQueueTab').classList.remove('active');
-    document.getElementById('btnHistoryTab').classList.remove('active');
-    document.getElementById('btnStaffTab').classList.remove('active');
-    
-    // Show selected tab
-    if (tabName === 'queue') {
-        document.getElementById('queueTab').classList.add('active');
-        document.getElementById('btnQueueTab').classList.add('active');
+    currentTab = tabName;
+    const tabs = ['checkin', 'history', 'profile'];
+    tabs.forEach(t => {
+        const tabEl = document.getElementById(t + 'Tab');
+        const btnEl = document.getElementById('btn' + t.charAt(0).toUpperCase() + t.slice(1) + 'Tab');
+        if (tabEl) tabEl.classList.remove('active');
+        if (btnEl) btnEl.classList.remove('active');
+    });
+
+    const activeTab = document.getElementById(tabName + 'Tab');
+    const activeBtn = document.getElementById('btn' + tabName.charAt(0).toUpperCase() + tabName.slice(1) + 'Tab');
+    if (activeTab) activeTab.classList.add('active');
+    if (activeBtn) activeBtn.classList.add('active');
+
+    if (tabName === 'checkin') {
+        loadDoctorsForCheckIn();
     } else if (tabName === 'history') {
-        document.getElementById('historyTab').classList.add('active');
-        document.getElementById('btnHistoryTab').classList.add('active');
-        
-        // Load history when tab is opened
-        loadQueueHistory();
-    } else if (tabName === 'staff') {
-        document.getElementById('staffTab').classList.add('active');
-        document.getElementById('btnStaffTab').classList.add('active');
-        
-        // Load staff list when tab is opened
-        loadStaffList();
+        loadStaffStats();
     }
-}
-
-// Load queue history with filters
-async function loadQueueHistory(page = 1) {
-    currentPage = page;
-    const offset = (page - 1) * historyLimit;
-    
-    // Build query parameters
-    const params = new URLSearchParams({
-        limit: historyLimit,
-        offset: offset,
-        ...currentFilters
-    });
-    
-    try {
-        const response = await fetch(`/STI_Queuing_System/api/get-queue-history.php?${params}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            displayHistory(result.history);
-            historyTotal = result.total;
-            updatePagination();
-        } else {
-            showError('Failed to load history');
-        }
-    } catch (error) {
-        console.error('Error loading history:', error);
-        showError('Error loading history');
-    }
-}
-
-// Display history in table
-function displayHistory(history) {
-    const tbody = document.getElementById('historyTableBody');
-    
-    if (history.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="no-data">No records found</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = history.map(record => {
-        const statusClass = `status-${record.status}`;
-        const dateIssued = new Date(record.date_issued);
-        const timeCalled = record.time_called ? new Date(record.time_called) : null;
-        const timeCompleted = record.time_completed ? new Date(record.time_completed) : null;
-        
-        return `
-            <tr>
-                <td><strong>${record.queue_number}</strong></td>
-                <td>${escapeHtml(record.student_name)}</td>
-                <td>${escapeHtml(record.student_number || 'N/A')}</td>
-                <td>${formatDateTime(dateIssued)}</td>
-                <td>${timeCalled ? formatTime(timeCalled) : 'N/A'}</td>
-                <td>${timeCompleted ? formatTime(timeCompleted) : 'N/A'}</td>
-                <td><span class="status-badge ${statusClass}">${record.status.toUpperCase()}</span></td>
-                <td>${escapeHtml(record.staff_name)}</td>
-            </tr>
-        `;
-    }).join('');
-}
-
-// Apply filters
-function applyFilters() {
-    currentFilters = {};
-    
-    const startDate = document.getElementById('filterStartDate').value;
-    const endDate = document.getElementById('filterEndDate').value;
-    const status = document.getElementById('filterStatus').value;
-    const search = document.getElementById('filterSearch').value.trim();
-    
-    if (startDate) currentFilters.start_date = startDate;
-    if (endDate) currentFilters.end_date = endDate;
-    if (status && status !== 'all') currentFilters.status = status;
-    if (search) currentFilters.search = search;
-    
-    loadQueueHistory(1);
-}
-
-// Reset filters
-function resetFilters() {
-    document.getElementById('filterStartDate').value = '';
-    document.getElementById('filterEndDate').value = '';
-    document.getElementById('filterStatus').value = 'all';
-    document.getElementById('filterSearch').value = '';
-    currentFilters = {};
-    loadQueueHistory(1);
-}
-
-// Export history
-function exportHistory(format) {
-    // Build query parameters with current filters
-    const params = new URLSearchParams({
-        format: format,
-        ...currentFilters
-    });
-    
-    // Open export URL in new window
-    window.open(`/STI_Queuing_System/api/export-queue-history.php?${params}`, '_blank');
-}
-
-// Pagination functions
-function updatePagination() {
-    const totalPages = Math.ceil(historyTotal / historyLimit);
-    document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages} (${historyTotal} records)`;
-    
-    // Disable/enable buttons
-    document.getElementById('btnPrevPage').disabled = currentPage <= 1;
-    document.getElementById('btnNextPage').disabled = currentPage >= totalPages;
-}
-
-function loadPreviousPage() {
-    if (currentPage > 1) {
-        loadQueueHistory(currentPage - 1);
-    }
-}
-
-function loadNextPage() {
-    const totalPages = Math.ceil(historyTotal / historyLimit);
-    if (currentPage < totalPages) {
-        loadQueueHistory(currentPage + 1);
-    }
-}
-
-// Utility functions
-function formatDateTime(date) {
-    return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function formatTime(date) {
-    return date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
 }
 
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function showError(message) {
-    const tbody = document.getElementById('historyTableBody');
-    tbody.innerHTML = `<tr><td colspan="8" class="error">${escapeHtml(message)}</td></tr>`;
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
 
 // ========================================
-// STAFF MANAGEMENT FUNCTIONS
+// 1. CHECK-IN LOGIC
 // ========================================
+async function loadDoctorsForCheckIn() {
+    const docSelect = document.getElementById('checkInDoctor');
+    if (!docSelect || !departmentId) return;
 
-// Load departments for dropdown
-async function loadDepartments() {
     try {
-        const response = await fetch('/STI_Queuing_System/api/get-departments.php');
-        const result = await response.json();
-        
-        if (result.success) {
-            allDepartments = result.departments;
-            
-            // Populate staff department dropdown
-            const staffDeptSelect = document.getElementById('staffDepartment');
-            staffDeptSelect.innerHTML = '<option value="">-- Select Department --</option>';
-            
-            result.departments.forEach(dept => {
-                const option = document.createElement('option');
-                option.value = dept.id;
-                option.textContent = dept.name;
-                staffDeptSelect.appendChild(option);
-            });
-            
-            // Populate filter dropdown
-            const filterSelect = document.getElementById('staffDeptFilter');
-            filterSelect.innerHTML = '<option value="">All Departments</option>';
-            
-            result.departments.forEach(dept => {
-                const option = document.createElement('option');
-                option.value = dept.id;
-                option.textContent = dept.name;
-                filterSelect.appendChild(option);
-            });
+        const res = await fetch(`/STI_Queueing-System/api/get-doctors.php?department_id=${encodeURIComponent(departmentId)}`);
+        const data = await res.json();
+
+        if (data.success && data.doctors) {
+            deptDoctors = data.doctors;
+            if (deptDoctors.length === 0) {
+                docSelect.innerHTML = '<option value="">-- No Active Doctors Available in Department --</option>';
+            } else {
+                docSelect.innerHTML = '<option value="">-- Select Attending Doctor (Required) --</option>' +
+                    deptDoctors.map(d => `<option value="${d.id}">${escapeHtml(d.full_name)} (${escapeHtml(d.specialization || 'General')} - ${escapeHtml(d.room_label || 'Desk')})</option>`).join('');
+            }
         }
-    } catch (error) {
-        console.error('Error loading departments:', error);
+    } catch (e) {
+        docSelect.innerHTML = '<option value="">Failed to load doctors</option>';
     }
 }
 
-// Handle add staff form submission
-async function handleAddStaff(event) {
+async function handleCheckIn(event) {
     event.preventDefault();
-    
-    const username = document.getElementById('staffUsername').value.trim();
-    const password = document.getElementById('staffPassword').value;
-    const fullName = document.getElementById('staffFullName').value.trim();
-    const deptId = document.getElementById('staffDepartment').value;
-    
-    // Basic validation
-    if (!username || !password || !fullName || !deptId) {
-        showFormMessage('Please fill in all required fields', 'error');
+    const msgEl = document.getElementById('checkInMessage');
+    const successCard = document.getElementById('ticketSuccessCard');
+    const submitBtn = document.getElementById('btnCheckInSubmit');
+
+    msgEl.style.display = 'none';
+    successCard.style.display = 'none';
+
+    const patientName = document.getElementById('checkInPatientName').value.trim();
+    const apptNumber = document.getElementById('checkInApptNumber').value.trim();
+    const gender = document.getElementById('checkInGender').value;
+    const ageVal = document.getElementById('checkInAge').value;
+    const weightVal = parseFloat(document.getElementById('checkInWeight').value);
+    const bpVal = document.getElementById('checkInBp').value.trim();
+    const doctorVal = document.getElementById('checkInDoctor').value;
+    const isPriority = document.getElementById('checkInPriority').checked;
+
+    // Client-side validations
+    if (!patientName) {
+        showMessage('Patient Name is required.', 'error');
         return;
     }
-    
-    if (password.length < 6) {
-        showFormMessage('Password must be at least 6 characters', 'error');
+    if (!apptNumber) {
+        showMessage('Appointment Number is required.', 'error');
         return;
     }
-    
-    // Check for spaces in username
-    if (username.includes(' ')) {
-        showFormMessage('Username cannot contain spaces', 'error');
+    if (!gender) {
+        showMessage('Please select patient gender.', 'error');
         return;
     }
-    
+    if (isNaN(weightVal) || weightVal < 0.5 || weightVal > 499.9) {
+        showMessage('Weight must be between 0.5 and 499.9 kg.', 'error');
+        return;
+    }
+
+    // BP Validation
+    const bpMatch = bpVal.match(/^(\d{2,3})\/(\d{2,3})$/);
+    if (!bpMatch) {
+        showMessage('Blood pressure must be in format 120/80.', 'error');
+        return;
+    }
+    const systolic = parseInt(bpMatch[1], 10);
+    const diastolic = parseInt(bpMatch[2], 10);
+    if (systolic <= diastolic) {
+        showMessage('Systolic pressure (top number) must be greater than diastolic (bottom number).', 'error');
+        return;
+    }
+
+    // Doctor Selection is MANDATORY
+    if (!doctorVal) {
+        showMessage('Please select an assigned doctor for this patient.', 'error');
+        return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Registering patient...';
+
+    const payload = {
+        department_id: departmentId,
+        patient_name: patientName,
+        appointment_number: apptNumber,
+        gender: gender,
+        age: ageVal ? parseInt(ageVal, 10) : null,
+        weight_kg: weightVal,
+        bp: bpVal,
+        doctor_id: parseInt(doctorVal, 10),
+        is_priority: isPriority
+    };
+
     try {
-        const response = await fetch('/STI_Queuing_System/api/add-staff.php', {
+        const response = await fetch('/STI_Queueing-System/api/checkin-patient.php', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                username: username,
-                password: password,
-                full_name: fullName,
-                department_id: parseInt(deptId)
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
         });
-        
+
+        if (response.status === 401) {
+            alert('Your session has expired. Redirecting to login...');
+            window.location.href = '/STI_Queueing-System/staff-login';
+            return;
+        }
+        if (response.status === 403) {
+            showMessage('Access Denied: You do not have permission to check in patients with current session role. If you switched users in another tab, please refresh.', 'error');
+            return;
+        }
+
         const result = await response.json();
-        
+
         if (result.success) {
-            showFormMessage('✓ Staff member added successfully!', 'success');
-            clearStaffForm();
-            loadStaffList();
+            // Display Ticket Success Card
+            document.getElementById('issuedTicketNumber').textContent = result.ticket_number;
+            document.getElementById('issuedTicketDept').textContent = result.department_name || departmentName;
+            
+            const selectedDoc = deptDoctors.find(d => d.id == doctorVal);
+            const docInfo = selectedDoc ? `Doctor: ${selectedDoc.full_name} (${selectedDoc.room_label || 'Desk'})` : '';
+            document.getElementById('issuedTicketDoctor').textContent = docInfo;
+
+            successCard.style.display = 'block';
+
+            // Reset inputs
+            document.getElementById('checkInPatientName').value = '';
+            document.getElementById('checkInApptNumber').value = '';
+            document.getElementById('checkInAge').value = '';
+            document.getElementById('checkInWeight').value = '';
+            document.getElementById('checkInBp').value = '';
+            document.getElementById('checkInPriority').checked = false;
+
+            successCard.scrollIntoView({ behavior: 'smooth' });
         } else {
-            showFormMessage('✗ ' + result.message, 'error');
+            showMessage(result.message || 'Check-in failed. Please try again.', 'error');
         }
     } catch (error) {
-        console.error('Error adding staff:', error);
-        showFormMessage('✗ Failed to add staff member', 'error');
+        showMessage('Network error during check-in. Please try again.', 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✓ Check In Patient & Issue Ticket';
     }
 }
 
-// Show form message
-function showFormMessage(message, type) {
-    const messageEl = document.getElementById('staffFormMessage');
-    messageEl.textContent = message;
-    messageEl.className = 'form-message ' + type;
-    messageEl.style.display = 'block';
-    
-    // Auto-hide success messages after 5 seconds
-    if (type === 'success') {
-        setTimeout(() => {
-            messageEl.style.display = 'none';
-        }, 5000);
-    }
+function showMessage(msg, type) {
+    const msgEl = document.getElementById('checkInMessage');
+    msgEl.textContent = msg;
+    msgEl.className = 'form-message ' + type;
+    msgEl.style.display = 'block';
 }
 
-// Clear staff form
-function clearStaffForm() {
-    document.getElementById('addStaffForm').reset();
-    document.getElementById('staffFormMessage').style.display = 'none';
+function clearCheckInForm() {
+    document.getElementById('checkInForm').reset();
+    document.getElementById('checkInMessage').style.display = 'none';
+    document.getElementById('ticketSuccessCard').style.display = 'none';
 }
 
-// Load staff list
-async function loadStaffList() {
-    const deptFilter = document.getElementById('staffDeptFilter').value;
-    const searchQuery = document.getElementById('staffSearchFilter').value.trim();
-    
-    const params = new URLSearchParams();
-    if (deptFilter) params.append('department_id', deptFilter);
-    if (searchQuery) params.append('search', searchQuery);
-    
+function resetForNextPatient() {
+    clearCheckInForm();
+    document.getElementById('checkInPatientName').focus();
+}
+
+// ========================================
+// 2. CHECK-IN SUMMARY STATS (COUNTS ONLY)
+// ========================================
+async function loadStaffStats() {
     try {
-        const response = await fetch(`/STI_Queuing_System/api/get-staff-list.php?${params}`);
-        const result = await response.json();
-        
-        if (result.success) {
-            allStaffList = result.staff;
-            displayStaffList(result.staff);
-            document.getElementById('staffCount').textContent = `Total: ${result.total} staff member${result.total !== 1 ? 's' : ''}`;
-        } else {
-            showStaffError('Failed to load staff list');
+        const res = await fetch('/STI_Queueing-System/api/get-staff-stats.php');
+        const data = await res.json();
+
+        if (data.success && data.stats) {
+            const s = data.stats;
+            document.getElementById('statTodayCount').textContent = s.today_count || 0;
+            document.getElementById('statWeekCount').textContent = s.week_count || 0;
+            document.getElementById('statMonthCount').textContent = s.month_count || 0;
+            document.getElementById('statTotalCount').textContent = s.total_count || 0;
         }
-    } catch (error) {
-        console.error('Error loading staff list:', error);
-        showStaffError('Error loading staff list');
+    } catch (e) {
+        console.error('Failed to load staff stats:', e);
     }
 }
 
-// Display staff list in table
-function displayStaffList(staffList) {
-    const tbody = document.getElementById('staffTableBody');
-    
-    if (staffList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="no-data">No staff members found</td></tr>';
+async function loadCustomRangeStats() {
+    const start = document.getElementById('rangeStart').value;
+    const end = document.getElementById('rangeEnd').value;
+
+    if (!start || !end) {
+        alert('Please select both start and end dates.');
         return;
     }
-    
-    tbody.innerHTML = staffList.map(staff => {
-        const createdDate = new Date(staff.created_at);
-        
-        return `
-            <tr>
-                <td><strong>${escapeHtml(staff.username)}</strong></td>
-                <td>${escapeHtml(staff.full_name)}</td>
-                <td><span class="dept-badge">${escapeHtml(staff.department_name)}</span></td>
-                <td>${createdDate.toLocaleDateString('en-US', { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                })}</td>
-            </tr>
-        `;
-    }).join('');
+
+    try {
+        const res = await fetch(`/STI_Queueing-System/api/get-staff-stats.php?startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`);
+        const data = await res.json();
+
+        if (data.success && data.stats) {
+            const resBox = document.getElementById('customRangeResult');
+            document.getElementById('customRangeCount').textContent = data.stats.custom_range_count || 0;
+            resBox.style.display = 'block';
+        }
+    } catch (e) {
+        alert('Failed to calculate check-in count for selected range.');
+    }
 }
 
-// Filter staff list (client-side for search)
-function filterStaffList() {
-    loadStaffList();
+// ========================================
+// LOGOUT WITH DUTY WARNING
+// ========================================
+function logout() {
+    if (isOnDuty) {
+        if (!confirm('You are currently marked ON DUTY.\nDo you want to logout now? (Note: Your duty session remains active until checked out).\n\nClick OK to proceed with logout.')) {
+            return;
+        }
+    } else {
+        if (!confirm('Are you sure you want to logout from Staff Portal?')) {
+            return;
+        }
+    }
+    window.location.href = '/STI_Queueing-System/api/logout.php';
 }
-
-// Show staff error
-function showStaffError(message) {
-    const tbody = document.getElementById('staffTableBody');
-    tbody.innerHTML = `<tr><td colspan="4" class="error">${escapeHtml(message)}</td></tr>`;
-}
+window.logout = logout;

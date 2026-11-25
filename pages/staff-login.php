@@ -1,26 +1,41 @@
+<?php
+require_once __DIR__ . '/../includes/auth.php';
+
+// Redirect if already authenticated
+if (isLoggedIn()) {
+    $user = getCurrentUser();
+    if ($user['role'] === 'admin') {
+        header('Location: /STI_Queueing-System/admin-dashboard');
+        exit;
+    } elseif ($user['role'] === 'doctor') {
+        header('Location: /STI_Queueing-System/doctor-dashboard');
+        exit;
+    } else {
+        header('Location: /STI_Queueing-System/staff-dashboard');
+        exit;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Staff Portal - STI College Queuing System</title>
-    <!-- <link rel="stylesheet" href="../css/style.css"> -->
-      <link rel="stylesheet" href="http://localhost/STI_Queuing_System/css/style.css">
+    <title>Portal Login - Hospital Queueing System</title>
+    <link rel="stylesheet" href="http://localhost/STI_Queueing-System/css/style.css">
 </head>
 <body>
     <div class="login-container">
         <div class="login-card">
             <!-- Logo Placeholder -->
-           <div class="logo-placeholder">
-            <img src="http://localhost/STI_Queuing_System/images/STI_logo.png" alt="STI Logo" class="logo">
-        </div>
+            <div class="logo-placeholder">
+                <img src="http://localhost/STI_Queueing-System/images/hospital_logo.png" alt="Hospital Logo" class="logo">
+            </div>
 
-
-            
             <!-- Login Header -->
             <div class="login-header">
-                <h1>Staff Portal</h1>
-                <p>Queue Management System</p>
+                <h1>Hospital Portal</h1>
+                <p>Admin • Staff • Doctor Access</p>
             </div>
 
             <!-- Login Form -->
@@ -34,6 +49,7 @@
                         name="username" 
                         placeholder="Enter your username" 
                         required
+                        autocomplete="username"
                     >
                 </div>
 
@@ -46,6 +62,7 @@
                         name="password" 
                         placeholder="Enter your password" 
                         required
+                        autocomplete="current-password"
                     >
                 </div>
 
@@ -55,7 +72,6 @@
         </div>
     </div>
 
-    <!-- <script src="../js/staff-login.js"></script> -->
-          <script src="http://localhost/STI_Queuing_System/js/staff-login.js?v=<?php echo time(); ?>"></script>
+    <script src="http://localhost/STI_Queueing-System/js/staff-login.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
